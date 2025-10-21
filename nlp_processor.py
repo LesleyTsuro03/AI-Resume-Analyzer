@@ -24,20 +24,7 @@ nltk.download('words', quiet=True)
 
 class AdvancedResumeAnalyzer:
     def __init__(self):
-        '''try:
-            self.nlp = spacy.load("en_core_web_sm")
-        except OSError:
-            # Try to download the model automatically
-            import os
-            import sys
-            print("Downloading spaCy English model...")
-            os.system(f"{sys.executable} -m spacy download en_core_web_sm")
-            try:
-                self.nlp = spacy.load("en_core_web_sm")
-            except OSError:
-                raise Exception("Please download the spaCy model: python -m spacy download en_core_web_sm")
-        
-        self.stop_words = set(stopwords.words('english'))'''
+
         
         # Comprehensive skills database covering ALL industries
         self.skill_keywords = {
