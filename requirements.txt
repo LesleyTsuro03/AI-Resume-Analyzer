@@ -6,4 +6,3 @@ nltk
 PyPDF2
 docx
 email_validator
-dateutil
