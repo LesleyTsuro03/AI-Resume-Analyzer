@@ -207,7 +207,7 @@ class ResumeAnalyzerApp:
             st.error("⛔ Access Denied: Only Super Administrators can access this page.")
             return
         
-        tab1, tab2, tab3, tab4 = st.tabs(["Add New User", "Manage Existing Users", "System Overview", "Danger Zone"])
+        tab1, tab2, tab3, tab4 = st.tabs(["Add New User", "Manage Existing Users", "System Overview", "Delete User"])
         
         with tab1:
             st.subheader("Add New HR User")
@@ -367,7 +367,7 @@ class ResumeAnalyzerApp:
                 st.dataframe(pd.DataFrame(login_data))
         
         with tab4:
-            st.subheader("🚨 Danger Zone - User Deletion")
+            st.subheader("🚨 Delete User - User Deletion")
             st.markdown('<div class="danger-zone">', unsafe_allow_html=True)
             st.warning("⚠️ **WARNING**: This action is irreversible! Deleting a user will permanently remove all their data including jobs, candidates, and CV files.")
             
