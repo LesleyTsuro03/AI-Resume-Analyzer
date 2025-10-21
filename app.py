@@ -136,7 +136,6 @@ class ResumeAnalyzerApp:
                         else:
                             st.warning("Please enter both username and password")
                 
-
             
             return False
         
@@ -413,40 +412,38 @@ class ResumeAnalyzerApp:
                 
                 if jobs:
                     for job in jobs:
-                        with st.expander(f"📋 {job.job_title} (Created by: {job.user.username})"):
+                        # Get fresh job data with relationships to avoid detached instance
+                        fresh_job = session.query(JobDescription).filter_by(job_id=job.job_id).first()
+                        username = fresh_job.user.username if fresh_job and fresh_job.user else "Unknown"
+                        
+                        with st.expander(f"📋 {fresh_job.job_title} (Created by: {username})"):
                             col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
                             
                             with col1:
                                 st.write("**Required Skills:**")
-                                st.write(job.required_skills)
-                                if job.qualifications:
+                                st.write(fresh_job.required_skills)
+                                if fresh_job.qualifications:
                                     st.write("**Qualifications:**")
-                                    st.write(job.qualifications)
+                                    st.write(fresh_job.qualifications)
                             
                             with col2:
-                                st.write(f"**Experience:** {job.experience_required}")
-                                # Fixed: Get candidates count with fresh session
-                                candidates_session = get_session()
-                                try:
-                                    job_with_candidates = candidates_session.query(JobDescription).filter_by(job_id=job.job_id).first()
-                                    candidates_count = len(job_with_candidates.candidates) if job_with_candidates else 0
-                                    st.write(f"**Candidates:** {candidates_count}")
-                                finally:
-                                    close_session()
-                                st.write(f"**Created:** {job.created_at.strftime('%Y-%m-%d')}")
+                                st.write(f"**Experience:** {fresh_job.experience_required}")
+                                candidates_count = len(fresh_job.candidates) if fresh_job.candidates else 0
+                                st.write(f"**Candidates:** {candidates_count}")
+                                st.write(f"**Created:** {fresh_job.created_at.strftime('%Y-%m-%d')}")
                             
                             with col3:
-                                if st.session_state.user.is_superadmin or job.user_id == st.session_state.user.user_id:
-                                    if st.button(f"Delete Job", key=f"delete_{job.job_id}"):
-                                        session.delete(job)
+                                if st.session_state.user.is_superadmin or fresh_job.user_id == st.session_state.user.user_id:
+                                    if st.button(f"Delete Job", key=f"delete_{fresh_job.job_id}"):
+                                        session.delete(fresh_job)
                                         session.commit()
-                                        st.success(f"Job '{job.job_title}' deleted successfully!")
+                                        st.success(f"Job '{fresh_job.job_title}' deleted successfully!")
                                         st.rerun()
                             
                             with col4:
-                                if st.session_state.user.is_superadmin or job.user_id == st.session_state.user.user_id:
-                                    if st.button(f"Delete Analysis", key=f"delete_analysis_{job.job_id}"):
-                                        success, message = delete_job_analysis(job.job_id, st.session_state.user.user_id)
+                                if st.session_state.user.is_superadmin or fresh_job.user_id == st.session_state.user.user_id:
+                                    if st.button(f"Delete Analysis", key=f"delete_analysis_{fresh_job.job_id}"):
+                                        success, message = delete_job_analysis(fresh_job.job_id, st.session_state.user.user_id)
                                         if success:
                                             st.success(message)
                                         else:
@@ -518,14 +515,8 @@ class ResumeAnalyzerApp:
                     st.write("**Experience Level:**", selected_job.experience_required)
                     st.write("**Created by:**", selected_job.user.username)
                     
-                    # Fixed: Get candidates count with fresh session to avoid detached instance error
-                    candidates_count_session = get_session()
-                    try:
-                        job_with_candidates = candidates_count_session.query(JobDescription).filter_by(job_id=selected_job.job_id).first()
-                        candidates_count = len(job_with_candidates.candidates) if job_with_candidates else 0
-                        st.metric("Candidates Analyzed", candidates_count)
-                    finally:
-                        close_session()
+                    candidates_count = len(selected_job.candidates) if selected_job.candidates else 0
+                    st.metric("Candidates Analyzed", candidates_count)
         finally:
             close_session()
 
