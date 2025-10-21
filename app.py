@@ -367,7 +367,7 @@ class ResumeAnalyzerApp:
                 st.dataframe(pd.DataFrame(login_data))
         
         with tab4:
-            st.subheader("🚨 Delete User - User Deletion")
+            st.subheader("🚨 Delete User")
             st.markdown('<div class="danger-zone">', unsafe_allow_html=True)
             st.warning("⚠️ **WARNING**: This action is irreversible! Deleting a user will permanently remove all their data including jobs, candidates, and CV files.")
             
