@@ -24,8 +24,6 @@ nltk.download('words', quiet=True)
 
 class AdvancedResumeAnalyzer:
     def __init__(self):
-
-        
         # Comprehensive skills database covering ALL industries
         self.skill_keywords = {
             # TECHNICAL & IT SKILLS
