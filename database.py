@@ -195,6 +195,9 @@ def reset_user_password(user_id, new_password, reset_by_superadmin=False):
     except Exception as e:
         session.rollback()
         return False, f"Error resetting password: {str(e)}"
+    
+
+
 
 def deactivate_user(user_id, deactivated_by):
     """Deactivate a user (superadmin only)"""
@@ -394,6 +397,52 @@ def delete_job_analysis(job_id, user_id):
     except Exception as e:
         session.rollback()
         return False, f"Error deleting job analysis: {str(e)}"
+    finally:
+        close_session()
+        
+def delete_user(user_id, deleted_by):
+    """Permanently delete a user and all their data (superadmin only)"""
+    session = get_session()
+    try:
+        # Check if deleter is superadmin
+        deleter = session.query(User).filter_by(user_id=deleted_by).first()
+        if not deleter or not deleter.is_superadmin:
+            return False, "Only superadmin can delete users"
+        
+        # Cannot delete self
+        if user_id == deleted_by:
+            return False, "Cannot delete your own account"
+        
+        user_to_delete = session.query(User).filter_by(user_id=user_id).first()
+        if not user_to_delete:
+            return False, "User not found"
+        
+        # Cannot delete other superadmins
+        if user_to_delete.is_superadmin:
+            return False, "Cannot delete other super administrators"
+        
+        username = user_to_delete.username
+        
+        # Get all jobs created by this user
+        user_jobs = session.query(JobDescription).filter_by(user_id=user_id).all()
+        
+        # Delete all data associated with this user
+        for job in user_jobs:
+            # Delete job analysis (this handles candidates, skills, education, experience, and CVs)
+            delete_job_analysis(job.job_id, deleted_by)
+        
+        # Delete any remaining CV files uploaded by this user
+        session.query(CVStorage).filter_by(user_id=user_id).delete()
+        
+        # Finally delete the user
+        session.delete(user_to_delete)
+        session.commit()
+        
+        return True, f"User '{username}' and all associated data have been permanently deleted"
+        
+    except Exception as e:
+        session.rollback()
+        return False, f"Error deleting user: {str(e)}"
     finally:
         close_session()
 

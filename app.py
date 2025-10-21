@@ -13,7 +13,7 @@ from database import (
     create_user, verify_user, get_all_users, reset_user_password, 
     deactivate_user, activate_user, get_user_stats, get_recent_candidates,
     store_cv_file, get_cv_by_resume_code, get_cv_by_phone_number,
-    delete_job_analysis, check_duplicate_candidate
+    delete_job_analysis, check_duplicate_candidate, delete_user
 )
 from nlp_processor import ResumeParser
 from ml_model import ScoringModel
@@ -90,6 +90,13 @@ st.markdown("""
         border: 1px solid #ffeaa7;
         border-radius: 5px;
         padding: 10px;
+        margin: 10px 0;
+    }
+    .danger-zone {
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        border-radius: 5px;
+        padding: 15px;
         margin: 10px 0;
     }
 </style>
@@ -200,7 +207,7 @@ class ResumeAnalyzerApp:
             st.error("⛔ Access Denied: Only Super Administrators can access this page.")
             return
         
-        tab1, tab2, tab3 = st.tabs(["Add New User", "Manage Existing Users", "System Overview"])
+        tab1, tab2, tab3, tab4 = st.tabs(["Add New User", "Manage Existing Users", "System Overview", "Danger Zone"])
         
         with tab1:
             st.subheader("Add New HR User")
@@ -358,9 +365,51 @@ class ResumeAnalyzerApp:
                         'Status': 'Active' if user.is_active else 'Inactive'
                     })
                 st.dataframe(pd.DataFrame(login_data))
+        
+        with tab4:
+            st.subheader("🚨 Danger Zone - User Deletion")
+            st.markdown('<div class="danger-zone">', unsafe_allow_html=True)
+            st.warning("⚠️ **WARNING**: This action is irreversible! Deleting a user will permanently remove all their data including jobs, candidates, and CV files.")
+            
+            users = get_all_users(st.session_state.user.user_id)
+            hr_users = [u for u in users if not u.is_superadmin and u.user_id != st.session_state.user.user_id]
+            
+            if hr_users:
+                st.write("**Select HR User to Delete:**")
+                delete_user_select = st.selectbox(
+                    "Choose user to delete",
+                    [f"{u.username} (ID: {u.user_id}) - {u.email}" for u in hr_users],
+                    key="delete_user_select"
+                )
+                
+                # Confirmation
+                st.write("**Confirmation Required:**")
+                confirm_username = st.text_input("Type the username to confirm deletion", placeholder="Enter username exactly as shown")
+                confirm_delete = st.checkbox("I understand this will permanently delete all user data")
+                
+                if st.button("🗑️ PERMANENTLY DELETE USER", type="primary", disabled=not (confirm_delete and confirm_username)):
+                    if delete_user_select and confirm_username:
+                        user_id = int(delete_user_select.split("ID: ")[1].split(")")[0])
+                        selected_username = delete_user_select.split(" (ID:")[0]
+                        
+                        if confirm_username == selected_username:
+                            success, message = delete_user(user_id, st.session_state.user.user_id)
+                            if success:
+                                st.error(f"✅ User '{selected_username}' and all their data have been permanently deleted!")
+                                st.rerun()
+                            else:
+                                st.error(f"❌ {message}")
+                        else:
+                            st.error("Username confirmation does not match. Please type the username exactly.")
+                    else:
+                        st.warning("Please select a user and confirm the username")
+            else:
+                st.info("No HR users available for deletion.")
+            
+            st.markdown('</div>', unsafe_allow_html=True)
     
     def manage_jobs_page(self):
-        """Job management page"""
+        """Job management page with superadmin access to all jobs"""
         st.title("💼 Manage Jobs")
         
         tab1, tab2 = st.tabs(["Create New Job", "View Existing Jobs"])
@@ -407,14 +456,17 @@ class ResumeAnalyzerApp:
             try:
                 if st.session_state.user.is_superadmin:
                     jobs = session.query(JobDescription).all()
+                    st.info("👑 Super Admin View: You can see and manage all jobs in the system")
                 else:
                     jobs = session.query(JobDescription).filter_by(user_id=st.session_state.user.user_id).all()
+                    st.info("👤 HR User View: You can only see and manage your own jobs")
                 
                 if jobs:
                     for job in jobs:
                         # Get fresh job data with relationships to avoid detached instance
                         fresh_job = session.query(JobDescription).filter_by(job_id=job.job_id).first()
                         username = fresh_job.user.username if fresh_job and fresh_job.user else "Unknown"
+                        is_owner = fresh_job.user_id == st.session_state.user.user_id
                         
                         with st.expander(f"📋 {fresh_job.job_title} (Created by: {username})"):
                             col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
@@ -425,23 +477,30 @@ class ResumeAnalyzerApp:
                                 if fresh_job.qualifications:
                                     st.write("**Qualifications:**")
                                     st.write(fresh_job.qualifications)
+                                if not is_owner and st.session_state.user.is_superadmin:
+                                    st.warning(f"🔒 This job belongs to another user ({username})")
                             
                             with col2:
                                 st.write(f"**Experience:** {fresh_job.experience_required}")
                                 candidates_count = len(fresh_job.candidates) if fresh_job.candidates else 0
                                 st.write(f"**Candidates:** {candidates_count}")
                                 st.write(f"**Created:** {fresh_job.created_at.strftime('%Y-%m-%d')}")
+                                st.write(f"**Owner:** {username}")
                             
                             with col3:
-                                if st.session_state.user.is_superadmin or fresh_job.user_id == st.session_state.user.user_id:
+                                # Delete job button - available to owner or superadmin
+                                if st.session_state.user.is_superadmin or is_owner:
                                     if st.button(f"Delete Job", key=f"delete_{fresh_job.job_id}"):
                                         session.delete(fresh_job)
                                         session.commit()
                                         st.success(f"Job '{fresh_job.job_title}' deleted successfully!")
                                         st.rerun()
+                                else:
+                                    st.write("")  # Empty space for alignment
                             
                             with col4:
-                                if st.session_state.user.is_superadmin or fresh_job.user_id == st.session_state.user.user_id:
+                                # Delete analysis button - available to owner or superadmin
+                                if st.session_state.user.is_superadmin or is_owner:
                                     if st.button(f"Delete Analysis", key=f"delete_analysis_{fresh_job.job_id}"):
                                         success, message = delete_job_analysis(fresh_job.job_id, st.session_state.user.user_id)
                                         if success:
@@ -449,6 +508,8 @@ class ResumeAnalyzerApp:
                                         else:
                                             st.error(message)
                                         st.rerun()
+                                else:
+                                    st.write("")  # Empty space for alignment
                 else:
                     st.info("No jobs created yet. Create your first job using the form above.")
             finally:
@@ -463,6 +524,7 @@ class ResumeAnalyzerApp:
             # Get user's jobs (or all jobs for superadmin)
             if st.session_state.user.is_superadmin:
                 jobs = session.query(JobDescription).all()
+                st.info("👑 Super Admin: You can analyze resumes for any job in the system")
             else:
                 jobs = session.query(JobDescription).filter_by(user_id=st.session_state.user.user_id).all()
             
@@ -517,6 +579,10 @@ class ResumeAnalyzerApp:
                     
                     candidates_count = len(selected_job.candidates) if selected_job.candidates else 0
                     st.metric("Candidates Analyzed", candidates_count)
+                    
+                    # Show warning if analyzing another user's job
+                    if selected_job.user_id != st.session_state.user.user_id and st.session_state.user.is_superadmin:
+                        st.warning(f"👑 You are analyzing resumes for {selected_job.user.username}'s job as Super Admin")
         finally:
             close_session()
 
@@ -924,6 +990,7 @@ class ResumeAnalyzerApp:
         try:
             if st.session_state.user.is_superadmin:
                 candidates = session.query(Candidate).order_by(Candidate.created_at.desc()).limit(10).all()
+                st.info("👑 Super Admin: You can view all CVs in the system")
             else:
                 candidates = session.query(Candidate).join(JobDescription).filter(
                     JobDescription.user_id == st.session_state.user.user_id
@@ -936,6 +1003,8 @@ class ResumeAnalyzerApp:
                     with col1:
                         st.write(f"**{candidate.candidate_name}**")
                         st.write(f"Job: {candidate.job.job_title}")
+                        if st.session_state.user.is_superadmin:
+                            st.write(f"Owner: {candidate.job.user.username}")
                     with col2:
                         st.write(f"Score: {candidate.compatibility_score}%")
                     with col3:
@@ -1014,6 +1083,7 @@ class ResumeAnalyzerApp:
             # Get jobs based on user role
             if st.session_state.user.is_superadmin:
                 jobs = session.query(JobDescription).all()
+                st.info("👑 Super Admin: You can view analytics for all jobs in the system")
             else:
                 jobs = session.query(JobDescription).filter_by(user_id=st.session_state.user.user_id).all()
             
