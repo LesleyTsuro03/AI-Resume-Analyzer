@@ -15,4 +15,4 @@ scikit-learn>=1.0.0
 phonenumbers
 python-multipart>=0.0.6
 bcrypt
-validate_email
+email_validator
