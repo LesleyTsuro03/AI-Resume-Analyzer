@@ -2,3 +2,4 @@ plotly
 sqlalchemy
 bcrypt
 spacy
+nltk
