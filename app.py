@@ -152,7 +152,7 @@ class ResumeAnalyzerApp:
         elif len(username) < 3 or len(username) > 30:
             errors.append("Username must be between 3 and 30 characters")
         elif not re.match(r'^[a-zA-Z0-9_]+$', username):
-            errors.append("Username can only contain letters, numbers, and underscores")
+            errors.append("Username can only contain letters and underscores")
         elif username.startswith('_') or username.endswith('_'):
             errors.append("Username cannot start or end with an underscore")
         
