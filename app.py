@@ -99,6 +99,13 @@ st.markdown("""
         padding: 15px;
         margin: 10px 0;
     }
+    .requirements-box {
+        background-color: #f0f8ff;
+        padding: 10px;
+        border-radius: 5px;
+        margin: 10px 0;
+        border-left: 4px solid #1f77b4;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -110,6 +117,59 @@ class ResumeAnalyzerApp:
         # Try to load pre-trained model
         if os.path.exists('model/trained_model.pkl'):
             self.scoring_model.load_model('model/trained_model.pkl')
+    
+    def validate_password_strength(self, password):
+        """Validate password strength"""
+        errors = []
+        
+        if len(password) < 8:
+            errors.append("Password must be at least 8 characters long")
+        
+        # Check for uppercase
+        if not re.search(r'[A-Z]', password):
+            errors.append("Password must contain at least one uppercase letter (A-Z)")
+        
+        # Check for lowercase
+        if not re.search(r'[a-z]', password):
+            errors.append("Password must contain at least one lowercase letter (a-z)")
+        
+        # Check for numbers
+        if not re.search(r'[0-9]', password):
+            errors.append("Password must contain at least one number (0-9)")
+        
+        # Check for special characters
+        if not re.search(r'[!@#$%^&*()_+\-=\[\]{};:\'",.<>?/\\|`~]', password):
+            errors.append("Password must contain at least one special character (!@#$%^&* etc.)")
+        
+        return errors
+    
+    def validate_username(self, username):
+        """Validate username format"""
+        errors = []
+        
+        if not username:
+            errors.append("Username is required")
+        elif len(username) < 3 or len(username) > 30:
+            errors.append("Username must be between 3 and 30 characters")
+        elif not re.match(r'^[a-zA-Z0-9_]+$', username):
+            errors.append("Username can only contain letters, numbers, and underscores")
+        elif username.startswith('_') or username.endswith('_'):
+            errors.append("Username cannot start or end with an underscore")
+        
+        return errors
+    
+    def validate_email(self, email):
+        """Validate email format"""
+        errors = []
+        
+        if not email:
+            errors.append("Email is required")
+        else:
+            email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+            if not re.match(email_pattern, email):
+                errors.append("Please enter a valid email address (e.g., user@company.com)")
+        
+        return errors
     
     def login_page(self):
         """User authentication page"""
@@ -216,22 +276,61 @@ class ResumeAnalyzerApp:
                 col1, col2 = st.columns(2)
                 
                 with col1:
-                    new_username = st.text_input("Username*", placeholder="Enter unique username")
+                    new_username = st.text_input("Username*", placeholder="Enter unique username (3-30 characters)")
                     new_email = st.text_input("Email Address*", placeholder="user@company.com")
                 
                 with col2:
-                    new_password = st.text_input("Password*", type="password", placeholder="Enter secure password")
-                    confirm_password = st.text_input("Confirm Password*", type="password", placeholder="Confirm password")
+                    new_password = st.text_input("Password*", type="password", 
+                                               placeholder="Min 8 chars: upper, lower, number, special")
+                    confirm_password = st.text_input("Confirm Password*", type="password", 
+                                                   placeholder="Confirm password")
+                
+                # Password requirements display
+                st.markdown("""
+                <div class="requirements-box">
+                <strong>Password Requirements:</strong>
+                <ul style="margin: 5px 0; padding-left: 20px;">
+                    <li>Minimum 8 characters</li>
+                    <li>At least one uppercase letter (A-Z)</li>
+                    <li>At least one lowercase letter (a-z)</li>
+                    <li>At least one number (0-9)</li>
+                    <li>At least one special character (!@#$%^&* etc.)</li>
+                </ul>
+                </div>
+                """, unsafe_allow_html=True)
                 
                 submitted = st.form_submit_button("Create User", type="primary")
                 
                 if submitted:
-                    if not all([new_username, new_email, new_password, confirm_password]):
-                        st.error("Please fill in all required fields (*)")
-                    elif new_password != confirm_password:
-                        st.error("Passwords do not match!")
-                    elif len(new_password) < 6:
-                        st.error("Password must be at least 6 characters long")
+                    # Validate all fields
+                    validation_errors = []
+                    
+                    # Username validation
+                    username_errors = self.validate_username(new_username)
+                    if username_errors:
+                        validation_errors.extend(username_errors)
+                    
+                    # Email validation
+                    email_errors = self.validate_email(new_email)
+                    if email_errors:
+                        validation_errors.extend(email_errors)
+                    
+                    # Password validation
+                    if not new_password:
+                        validation_errors.append("Password is required")
+                    else:
+                        password_errors = self.validate_password_strength(new_password)
+                        if password_errors:
+                            validation_errors.extend(password_errors)
+                    
+                    # Confirm password
+                    if new_password != confirm_password:
+                        validation_errors.append("Passwords do not match")
+                    
+                    # Show errors or create user
+                    if validation_errors:
+                        for error in validation_errors:
+                            st.error(error)
                     else:
                         success, message = create_user(
                             username=new_username,
@@ -242,6 +341,8 @@ class ResumeAnalyzerApp:
                         )
                         if success:
                             st.success(f"✅ User '{new_username}' created successfully!")
+                            # Clear form
+                            st.rerun()
                         else:
                             st.error(f"❌ {message}")
         
@@ -277,15 +378,23 @@ class ResumeAnalyzerApp:
                     reset_user = st.selectbox("Select User", 
                                             [f"{u['Username']} (ID: {u['ID']})" for u in user_data if u['ID'] != st.session_state.user.user_id],
                                             key="reset_select")
-                    new_pass = st.text_input("New Password", type="password", key="new_pass")
+                    new_pass = st.text_input("New Password", type="password", 
+                                           placeholder="Enter strong password", key="new_pass")
+                    
                     if st.button("Reset Password", key="reset_btn"):
                         if reset_user and new_pass:
-                            user_id = int(reset_user.split("ID: ")[1].split(")")[0])
-                            success, message = reset_user_password(user_id, new_pass, True)
-                            if success:
-                                st.success(f"✅ Password reset for user ID {user_id}")
+                            # Validate new password
+                            password_errors = self.validate_password_strength(new_pass)
+                            if password_errors:
+                                for error in password_errors:
+                                    st.error(error)
                             else:
-                                st.error(f"❌ {message}")
+                                user_id = int(reset_user.split("ID: ")[1].split(")")[0])
+                                success, message = reset_user_password(user_id, new_pass, True)
+                                if success:
+                                    st.success(f"✅ Password reset for user ID {user_id}")
+                                else:
+                                    st.error(f"❌ {message}")
                         else:
                             st.warning("Please select a user and enter new password")
                 
@@ -1467,23 +1576,27 @@ This analysis provides a comprehensive view of the candidate pool suitability fo
                         st.error("Please fill in all fields")
                     elif new_password != confirm_password:
                         st.error("New passwords do not match")
-                    elif len(new_password) < 6:
-                        st.error("New password must be at least 6 characters long")
                     else:
-                        # Verify current password
-                        session = get_session()
-                        try:
-                            user = session.query(User).filter_by(user_id=st.session_state.user.user_id).first()
-                            if user and bcrypt.checkpw(current_password.encode('utf-8'), user.hashed_password.encode('utf-8')):
-                                success, message = reset_user_password(st.session_state.user.user_id, new_password)
-                                if success:
-                                    st.success("✅ Password updated successfully!")
+                        # Validate new password strength
+                        password_errors = self.validate_password_strength(new_password)
+                        if password_errors:
+                            for error in password_errors:
+                                st.error(error)
+                        else:
+                            # Verify current password
+                            session = get_session()
+                            try:
+                                user = session.query(User).filter_by(user_id=st.session_state.user.user_id).first()
+                                if user and bcrypt.checkpw(current_password.encode('utf-8'), user.hashed_password.encode('utf-8')):
+                                    success, message = reset_user_password(st.session_state.user.user_id, new_password)
+                                    if success:
+                                        st.success("✅ Password updated successfully!")
+                                    else:
+                                        st.error(f"❌ {message}")
                                 else:
-                                    st.error(f"❌ {message}")
-                            else:
-                                st.error("Current password is incorrect")
-                        finally:
-                            close_session()
+                                    st.error("Current password is incorrect")
+                            finally:
+                                close_session()
     
     def run(self):
         """Main application runner"""
